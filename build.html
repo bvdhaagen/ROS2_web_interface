@@ -722,7 +722,7 @@ function create3DMap(width, height, data){
   mapPlane.position.set(
     mapOrigin.x + mapWidthMeters / 2, 
     0.01, // Slightly above ground to avoid z-fighting
-    0.0
+    mapHeightMeters + mapOrigin.y -1    //   <<<<< to be tuned 
   );
   
   scene.add(mapPlane);
