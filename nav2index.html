@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROS2 Robot Visualization with Nav2</title>
+  <script src="https://cdn.rawgit.com/RobotWebTools/roslibjs/0.20.0/build/roslib.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      overflow: hidden;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    header {
+      text-align: center;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    h1 {
+      margin: 0;
+      font-size: 2.2rem;
+      background: linear-gradient(90deg, #4e54c8, #8f94fb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .subtitle {
+      font-size: 1rem;
+      opacity: 0.8;
+      margin-top: 5px;
+    }
+    
+    .content {
+      display: flex;
+      flex: 1;
+    }
+    
+    #visualization {
+      flex: 1;
+      position: relative;
+    }
+    
+    .controls {
+      width: 300px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+    
+    .nav-goals-panel {
+      position: absolute;
+      right: 1325px;
+      top: 20px;
+      width: 250px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      z-index: 10;
+      backdrop-filter: blur(5px);
+    }
+    
+    .control-group {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    h2 {
+      margin-top: 0;
+      font-size: 1.3rem;
+      color: #8f94fb;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+    }
+    
+    h3 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: #8f94fb;
+      padding-bottom: 8px;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    button {
+      background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);
+      border: none;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      flex: 1;
+      min-width: 80px;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    button.secondary {
+      background: linear-gradient(135deg, #2c3e50 0%, #4a5568 100%);
+    }
+    
+    button.success {
+      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    }
+    
+    .teleop-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 5px;
+      margin: 10px 0;
+    }
+    
+    .teleop-btn {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      padding: 0;
+    }
+    
+    .slider-container {
+      margin: 15px 0;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      outline: none;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #8f94fb;
+      cursor: pointer;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4caf50;
+    }
+    
+    .status.off .status-indicator {
+      background: #f44336;
+    }
+    
+    footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      background: rgba(0, 0, 0, 0.3);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    #rosStatus {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 100;
+    }
+    
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 30px;
+    }
+    
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+      background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);
+    }
+    
+    input:checked + .toggle-slider:before {
+      transform: translateX(30px);
+    }
+    
+    .light-control {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 10px 0;
+    }
+    
+    .map-info {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 10px;
+    }
+    
+    .map-info span {
+      font-size: 0.9rem;
+    }
+    
+    .goal-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .goal-input {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    .goal-input input {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.3);
+      color: white;
+    }
+    
+    .pose-display {
+      margin-top: 15px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 5px;
+      font-size: 0.9rem;
+    }
+    
+    .pose-display div {
+      margin-bottom: 5px;
+    }
+    
+    .nav-status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    
+    .goal-marker {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #2ecc71;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      pointer-events: none;
+    }
+    
+    .goal-orientation {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 25px solid #3498db;
+      transform-origin: center;
+      transform: translate(-50%, -50%);
+      z-index: 4;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+ 
+    
+    <div class="content">
+      <div id="visualization">
+        <div class="nav-goals-panel">
+          <h3>Navigation Goals</h3>
+          <div class="button-group">
+            <button id="setGoalMode" class="success">Set Goal</button>
+            <button id="cancelGoal" class="secondary">Cancel Goal</button>
+          </div>
+          
+          <div class="goal-form">
+            <div class="goal-input">
+              <label for="goalX">X Position:</label>
+              <input type="number" id="goalX" step="0.1" value="2.0">
+            </div>
+            <div class="goal-input">
+              <label for="goalY">Y Position:</label>
+              <input type="number" id="goalY" step="0.1" value="0.0">
+            </div>
+            <div class="goal-input">
+              <label for="goalTheta">Orientation (θ):</label>
+              <input type="number" id="goalTheta" step="0.1" value="0.0">
+            </div>
+            <button id="sendGoal">Send Navigation Goal</button>
+          </div>
+          
+          <div class="pose-display">
+            <div>AMCL Pose (X, Y): <span id="amclPose">0.0, 0.0</span></div>
+            <div>AMCL Theta: <span id="amclTheta">0.0</span>°</div>
+            <div>Covariance: <span id="amclCovariance">Unknown</span></div>
+          </div>
+          
+          <div class="nav-status">
+            <h3>Navigation Status</h3>
+            <div id="navStatus">Ready</div>
+            <div id="goalResult"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="controls">
+        <div class="control-group">
+          <h2>Robot Movement</h2>
+          <div class="teleop-grid">
+            <button class="teleop-btn" onclick="move(1,1)">↖</button>
+            <button class="teleop-btn" onclick="move(1,0)">↑</button>
+            <button class="teleop-btn" onclick="move(1,-1)">↗</button>
+            <button class="teleop-btn" onclick="move(0,1)">←</button>
+            <button class="teleop-btn" onclick="move(0,0)">⏹</button>
+            <button class="teleop-btn" onclick="move(0,-1)">→</button>
+            <button class="teleop-btn" onclick="move(-1,1)">↙</button>
+            <button class="teleop-btn" onclick="move(-1,0)">↓</button>
+            <button class="teleop-btn" onclick="move(-1,-1)">↘</button>
+          </div>
+          <div class="slider-container">
+            <label for="linSpeed">Linear Speed: <span id="linSpeedValue">0.3</span> m/s</label>
+            <input type="range" id="linSpeed" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('linSpeedValue').textContent = this.value">
+          </div>
+          <div class="slider-container">
+            <label for="angSpeed">Angular Speed: <span id="angSpeedValue">1.0</span> rad/s</label>
+            <input type="range" id="angSpeed" min="0" max="2" step="0.1" value="1.0" oninput="document.getElementById('angSpeedValue').textContent = this.value">
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>Localization</h2>
+          <div class="button-group">
+            <button id="initPose">Set Initial Pose</button>
+            <button id="globalLoc">Global Localization</button>
+          </div>
+          <div class="status">
+            <div class="status-indicator" id="amclStatusIndicator"></div>
+            <span id="amclStatusText">AMCL: Not Active</span>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>Light Controls</h2>
+          <div class="light-control">
+            <span>Front Lights (White):</span>
+            <label class="toggle">
+              <input type="checkbox" id="frontLights" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="light-control">
+            <span>Rear Lights (Red):</span>
+            <label class="toggle">
+              <input type="checkbox" id="rearLights" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>Map Information</h2>
+          <div class="map-info">
+            <span id="mapDimensions">Dimensions: Not loaded</span>
+            <span id="mapResolution">Resolution: Not loaded</span>
+            <span id="mapLastUpdate">Last Update: Never</span>
+          </div>
+          <div class="button-group" style="margin-top: 10px;">
+            <button id="toggleMap">Show Map</button>
+            <button id="clearMap">Clear Map</button>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>Connection Status</h2>
+          <div class="status">
+            <div class="status-indicator" id="rosStatusIndicator"></div>
+            <span id="rosStatusText">Connecting to ROS...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <footer>
+      <p>ROS2 Robot Visualization with Nav2 Integration | WebGL Powered</p>
+    </footer>
+  </div>
+
+  <script>
+    let scene, camera, renderer, controls;
+    let ros;
+    let cmdVelTopic;
+    let robotMesh;
+    let robotGroup;
+    let frontLightEmission1, frontLightEmission2;
+    let rearLightEmission1, rearLightEmission2;
+    let laserPointsMesh;
+    
+    // Map variables
+    let mapTexture, mapMaterial, mapPlane, mapCanvas, mapCtx;
+    let mapOrigin = {x:0, y:0};
+    let mapResolution = 0.05;
+    let showMap = false;
+    
+    // Nav2 variables
+    let amclPoseTopic, initialPoseTopic, goalTopic, navStatusTopic;
+    let currentAmclPose = { 
+      position: { x: 0, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      yaw: 0,
+      covariance: []
+    };
+    
+    let currentGoal = null;
+    let goalMarker = null;
+    let goalOrientation = null;
+    let isSettingGoal = false;
+    let navStatus = "UNKNOWN";
+
+    // Initialize the application
+    initThree();
+    connectROS();
+    setupEventListeners();
+
+    function initThree(){
+      // Create scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      
+      // Setup camera
+      camera = new THREE.PerspectiveCamera(60, (window.innerWidth - 300) / window.innerHeight, 0.1, 2000);
+      camera.position.set(5, 8, 5);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth - 300, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.getElementById('visualization').appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Add lighting
+      scene.add(new THREE.AmbientLight(0x404040));
+      
+      let directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 10);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 1024;
+      directionalLight.shadow.mapSize.height = 1024;
+      scene.add(directionalLight);
+
+      // Create ground plane
+      const groundGeometry = new THREE.PlaneGeometry(20, 20);
+      const groundMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x16213e,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Add grid helper
+      const gridHelper = new THREE.GridHelper(20, 20, 0xffffff, 0xffffff);
+      gridHelper.material.opacity = 0.2;
+      gridHelper.material.transparent = true;
+      scene.add(gridHelper);
+
+      // Add coordinate axes for reference (X: red, Y: green, Z: blue)
+      const axesHelper = new THREE.AxesHelper(2);
+      scene.add(axesHelper);
+
+      // Create the robot group
+      robotGroup = new THREE.Group();
+      scene.add(robotGroup);
+
+      // Create the robot body (silver box)
+      const robotGeometry = new THREE.BoxGeometry(0.7, 0.21, 0.44);
+      const robotMaterial = new THREE.MeshPhongMaterial({color:0xC0C0C0});
+      robotMesh = new THREE.Mesh(robotGeometry, robotMaterial);
+      robotMesh.position.set(0, 0.125, 0);
+      robotMesh.castShadow = true;
+      robotGroup.add(robotMesh);
+
+      // Add front lights (white) - two lights at front
+      const frontLightGeometry = new THREE.SphereGeometry(0.04, 16, 16);
+      const frontLightMaterial = new THREE.MeshBasicMaterial({
+        color: 0x87CEEB,
+        transparent: true,
+        opacity: 0.5
+      });
+      
+      // Left front light
+      const frontLightLeft = new THREE.Mesh(frontLightGeometry, frontLightMaterial);
+      frontLightLeft.position.set(0.35, 0.125, 0.15);
+      robotGroup.add(frontLightLeft);
+      
+      // Right front light
+      const frontLightRight = new THREE.Mesh(frontLightGeometry, frontLightMaterial);
+      frontLightRight.position.set(0.35, 0.125, -0.15);
+      robotGroup.add(frontLightRight);
+      
+      // Add front light emission
+      frontLightEmission1 = new THREE.PointLight(0xFFFFFF, 1, 2);
+      frontLightEmission1.position.set(0.41, 0.125, 0.15);
+      robotGroup.add(frontLightEmission1);
+      
+      frontLightEmission2 = new THREE.PointLight(0xFFFFFF, 1, 2);
+      frontLightEmission2.position.set(0.41, 0.125, -0.15);
+      robotGroup.add(frontLightEmission2);
+
+      // Add rear lights (red) - two lights at rear
+      const rearLightGeometry = new THREE.SphereGeometry(0.04, 16, 16);
+      const rearLightMaterial = new THREE.MeshBasicMaterial({color: 0xFF0000});
+      
+      // Left rear light
+      const rearLightLeft = new THREE.Mesh(rearLightGeometry, rearLightMaterial);
+      rearLightLeft.position.set(-0.35, 0.125, 0.15);
+      robotGroup.add(rearLightLeft);
+      
+      // Right rear light
+      const rearLightRight = new THREE.Mesh(rearLightGeometry, rearLightMaterial);
+      rearLightRight.position.set(-0.35, 0.125, -0.15);
+      robotGroup.add(rearLightRight);
+      
+      // Add rear light emission
+      rearLightEmission1 = new THREE.PointLight(0xFF0000, 1, 2);
+      rearLightEmission1.position.set(-0.40, 0.125, 0.15);
+      robotGroup.add(rearLightEmission1);
+      
+      rearLightEmission2 = new THREE.PointLight(0xFF0000, 1, 2);
+      rearLightEmission2.position.set(-0.40, 0.125, -0.15);
+      robotGroup.add(rearLightEmission2);
+
+      // Add wheels
+      const wheelGeometry = new THREE.CylinderGeometry(0.0825, 0.0825, 0.05, 16);
+      const wheelMaterial = new THREE.MeshPhongMaterial({color: 0x333333});
+      
+      // Front-left wheel
+      const wheelFL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheelFL.rotation.x = Math.PI / 2;
+      wheelFL.position.set(0.24, 0.08, 0.2);
+      wheelFL.castShadow = true;
+      robotGroup.add(wheelFL);
+      
+      // Front-right wheel
+      const wheelFR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheelFR.rotation.x = Math.PI / 2;
+      wheelFR.position.set(0.24, 0.08, -0.2);
+      wheelFR.castShadow = true;
+      robotGroup.add(wheelFR);
+      
+      // Rear-left wheel
+      const wheelRL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheelRL.rotation.x = Math.PI / 2;
+      wheelRL.position.set(-0.24, 0.08, 0.2);
+      wheelRL.castShadow = true;
+      robotGroup.add(wheelRL);
+      
+      // Rear-right wheel
+      const wheelRR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheelRR.rotation.x = Math.PI / 2;
+      wheelRR.position.set(-0.24, 0.08, -0.2);
+      wheelRR.castShadow = true;
+      robotGroup.add(wheelRR);
+
+      // Add LIDAR sensor on top of the robot
+      const lidarGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 16);
+      const lidarMaterial = new THREE.MeshPhongMaterial({color: 0x333333});
+      const lidar = new THREE.Mesh(lidarGeometry, lidarMaterial);
+      lidar.position.set(0, 0.26, 0);
+      robotGroup.add(lidar);
+
+      // Position the robot
+      robotGroup.position.set(0, 0, 0);
+      
+      // Start animation loop
+      animate();
+      
+      // Handle window resize
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      camera.aspect = (window.innerWidth - 300) / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth - 300, window.innerHeight);
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function connectROS(){
+      ros = new ROSLIB.Ros({ url: 'ws://192.168.68.101:9090' });
+
+      ros.on('connection', ()=>{
+        console.log('Connected to ROS');
+        updateROSStatus('Connected to ROS - Ready', 'connected');
+        
+        // Subscribe to laser
+        subscribeTo('/scan','sensor_msgs/LaserScan',processLaserData);
+
+        // Subscribe to odometry
+        subscribeTo('/hoverboard_base_controller/odom', 'nav_msgs/Odometry', processOdometry);
+        
+        // Subscribe to map topics
+        subscribeTo('/map_metadata','nav_msgs/MapMetaData',processMapMetadata);
+        subscribeTo('/map','nav_msgs/OccupancyGrid',processMapData);
+        subscribeTo('/map_updates','map_msgs/OccupancyGridUpdate',processMapUpdate);
+        
+        // Setup Nav2 topics
+        setupNav2Topics();
+
+        // Setup cmd_vel publisher
+        cmdVelTopic = new ROSLIB.Topic({
+          ros: ros,
+          name: '/cmd_vel',
+          messageType: 'geometry_msgs/Twist'
+        });
+        
+        console.log('cmd_vel topic setup complete');
+      });
+      
+      ros.on('error', err=>{
+        console.error('Error',err);
+        updateROSStatus('ROS Error: ' + err, 'error');
+      });
+      
+      ros.on('close', ()=>{
+        console.log('Closed');
+        updateROSStatus('ROS Connection Closed', 'disconnected');
+      });
+    }
+
+    function setupNav2Topics() {
+      // Subscribe to AMCL pose
+      amclPoseTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/pose',
+        messageType: 'geometry_msgs/PoseWithCovarianceStamped'
+      });
+      
+      amclPoseTopic.subscribe(processAmclPose);
+      console.log('Subscribed to /amcl_pose');
+      
+      // Subscribe to navigation status
+      navStatusTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/navigation_status',
+        messageType: 'action_msgs/GoalStatusArray'
+      });
+      
+      navStatusTopic.subscribe(processNavStatus);
+      console.log('Subscribed to /navigation_status');
+      
+      // Setup initial pose publisher
+      initialPoseTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/initialpose',
+        messageType: 'geometry_msgs/PoseWithCovarianceStamped'
+      });
+      
+      // Setup goal publisher
+      goalTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/goal_pose',
+        messageType: 'geometry_msgs/PoseStamped'
+      });
+      
+      console.log('Nav2 topics setup complete');
+    }
+
+    function processAmclPose(msg) {
+      const pose = msg.pose.pose;
+      
+      currentAmclPose.position.x = pose.position.x;
+      currentAmclPose.position.y = pose.position.y;
+      currentAmclPose.position.z = pose.position.z;
+      currentAmclPose.orientation = pose.orientation;
+      currentAmclPose.covariance = msg.pose.covariance;
+      
+      // Convert quaternion to yaw (rotation around Y-axis)
+      const qx = pose.orientation.x;
+      const qy = pose.orientation.y;
+      const qz = pose.orientation.z;
+      const qw = pose.orientation.w;
+      
+      // Calculate yaw from quaternion
+      const siny_cosp = 2 * (qw * qz + qx * qy);
+      const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+      currentAmclPose.yaw = Math.atan2(siny_cosp, cosy_cosp);
+      
+      // Update AMCL status display
+      document.getElementById('amclPose').textContent = 
+        `${pose.position.x.toFixed(2)}, ${pose.position.y.toFixed(2)}`;
+      document.getElementById('amclTheta').textContent = 
+        (currentAmclPose.yaw * 180/Math.PI).toFixed(1);
+      
+      // Calculate position covariance (approximate)
+      const posCov = Math.sqrt(msg.pose.covariance[0] + msg.pose.covariance[7]);
+      document.getElementById('amclCovariance').textContent = posCov.toFixed(3);
+      
+      // Update AMCL status indicator
+      const amclIndicator = document.getElementById('amclStatusIndicator');
+      if (posCov < 0.1) {
+        amclIndicator.style.background = '#4caf50'; // Good localization
+        document.getElementById('amclStatusText').textContent = 'AMCL: Good';
+      } else if (posCov < 0.3) {
+        amclIndicator.style.background = '#ff9800'; // Moderate localization
+        document.getElementById('amclStatusText').textContent = 'AMCL: Moderate';
+      } else {
+        amclIndicator.style.background = '#f44336'; // Poor localization
+        document.getElementById('amclStatusText').textContent = 'AMCL: Poor';
+      }
+    }
+
+    function processNavStatus(msg) {
+      if (msg.status_list && msg.status_list.length > 0) {
+        const status = msg.status_list[0].status;
+        navStatus = status;
+        
+        const statusText = 
+          status === 1 ? 'Executing' :
+          status === 2 ? 'Accepted' :
+          status === 3 ? 'Canceling' :
+          status === 4 ? 'Succeeded' :
+          status === 5 ? 'Canceled' :
+          status === 6 ? 'Aborted' : 'Unknown';
+        
+        document.getElementById('navStatus').textContent = `Status: ${statusText}`;
+        
+        if (status === 4) {
+          document.getElementById('goalResult').textContent = 'Goal reached successfully!';
+          document.getElementById('goalResult').style.color = '#4caf50';
+        } else if (status === 5 || status === 6) {
+          document.getElementById('goalResult').textContent = 'Goal failed or was canceled';
+          document.getElementById('goalResult').style.color = '#f44336';
+        } else {
+          document.getElementById('goalResult').textContent = '';
+        }
+      }
+    }
+
+    function setInitialPose(x, y, theta) {
+      const quaternion = new THREE.Quaternion();
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), theta);
+      
+      const initialPose = new ROSLIB.Message({
+        header: {
+          frame_id: 'map'
+        },
+        pose: {
+          pose: {
+            position: {
+              x: x,
+              y: y,
+              z: 0
+            },
+            orientation: {
+              x: quaternion.x,
+              y: quaternion.y,
+              z: quaternion.z,
+              w: quaternion.w
+            }
+          },
+          covariance: [
+            0.25, 0, 0, 0, 0, 0,
+            0, 0.25, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0.06853891945200942
+          ]
+        }
+      });
+      
+      initialPoseTopic.publish(initialPose);
+      console.log(`Set initial pose to x:${x}, y:${y}, theta:${theta}`);
+    }
+
+    function sendNavGoal(x, y, theta) {
+      const quaternion = new THREE.Quaternion();
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), theta);
+      
+      const goal = new ROSLIB.Message({
+        header: {
+          frame_id: 'map',
+          stamp: {
+            sec: 0,
+            nanosec: 0
+          }
+        },
+        pose: {
+          position: {
+            x: x,
+            y: y,
+            z: 0
+          },
+          orientation: {
+            x: quaternion.x,
+            y: quaternion.y,
+            z: quaternion.z,
+            w: quaternion.w
+          }
+        }
+      });
+      
+      goalTopic.publish(goal);
+      console.log(`Sent navigation goal to x:${x}, y:${y}, theta:${theta}`);
+      
+      // Visualize the goal
+      visualizeGoal(x, y, theta);
+      
+      currentGoal = {x, y, theta};
+      document.getElementById('goalResult').textContent = 'Goal sent to navigator';
+      document.getElementById('goalResult').style.color = '#ff9800';
+    }
+
+    function visualizeGoal(x, y, theta) {
+      // Remove existing goal visualization
+      if (goalMarker) {
+        document.getElementById('visualization').removeChild(goalMarker);
+        document.getElementById('visualization').removeChild(goalOrientation);
+      }
+      
+      // Create goal marker
+      goalMarker = document.createElement('div');
+      goalMarker.className = 'goal-marker';
+      document.getElementById('visualization').appendChild(goalMarker);
+      
+      // Create orientation indicator
+      goalOrientation = document.createElement('div');
+      goalOrientation.className = 'goal-orientation';
+      document.getElementById('visualization').appendChild(goalOrientation);
+      
+      // Position the goal marker (this is a simplified 2D projection)
+      updateGoalVisualization();
+    }
+
+    function updateGoalVisualization() {
+      if (!currentGoal || !goalMarker || !goalOrientation) return;
+      
+      // This would need proper 3D-to-2D projection for accurate positioning
+      // For simplicity, we're using a basic approximation here
+      const x = currentGoal.x * 50 + 400; // Scale and offset
+      const y = 400 - currentGoal.y * 50; // Scale and offset (inverted Y)
+      
+      goalMarker.style.left = `${x}px`;
+      goalMarker.style.top = `${y}px`;
+      
+      goalOrientation.style.left = `${x}px`;
+      goalOrientation.style.top = `${y}px`;
+      goalOrientation.style.transform = `translate(-50%, -50%) rotate(${currentGoal.theta}rad)`;
+    }
+
+    function cancelCurrentGoal() {
+      // In a real implementation, you would send a cancel action to Nav2
+      console.log('Canceling current goal');
+      
+      // Remove goal visualization
+      if (goalMarker) {
+        document.getElementById('visualization').removeChild(goalMarker);
+        document.getElementById('visualization').removeChild(goalOrientation);
+        goalMarker = null;
+        goalOrientation = null;
+      }
+      
+      currentGoal = null;
+      document.getElementById('goalResult').textContent = 'Goal canceled';
+      document.getElementById('goalResult').style.color = '#f44336';
+    }
+
+    function updateROSStatus(message, status) {
+      const statusElement = document.getElementById('rosStatusText');
+      const indicator = document.getElementById('rosStatusIndicator');
+      
+      statusElement.textContent = message;
+      
+      // Update indicator color based on status
+      if (status === 'connected') {
+        indicator.style.background = '#4caf50';
+      } else if (status === 'error') {
+        indicator.style.background = '#f44336';
+      } else {
+        indicator.style.background = '#ff9800';
+      }
+    }
+
+    function processOdometry(msg) {
+      const pose = msg.pose.pose;
+      
+      // Update the entire robot group position and rotation
+      // Rotate coordinate system: ROS X (forward) -> Three.js Z (forward)
+      robotGroup.position.set(
+        pose.position.x,  // ROS Y (left) -> Three.js X (right, negative to match)
+        0.02,              // Keep robot slightly above ground
+        -pose.position.y    // ROS X (forward) -> Three.js Z (forward)
+      );
+      
+      // Convert quaternion to yaw (rotation around Y-axis)
+      const qx = pose.orientation.x;
+      const qy = pose.orientation.y;
+      const qz = pose.orientation.z;
+      const qw = pose.orientation.w;
+      
+      // Calculate yaw from quaternion
+      const siny_cosp = 2 * (qw * qz + qx * qy);
+      const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+      const yaw = Math.atan2(siny_cosp, cosy_cosp);
+      
+      robotGroup.rotation.y = yaw;
+      
+      // Update status display
+      updateROSStatus(
+        `Robot: x=${pose.position.x.toFixed(2)}, y=${pose.position.y.toFixed(2)}, yaw=${(yaw * 180/Math.PI).toFixed(1)}°`,
+        'connected'
+      );
+    }
+
+    // --- LASER ---
+    function processLaserData(msg){
+      // Check if we already have a laser mesh and remove it
+      if (laserPointsMesh) {
+        scene.remove(laserPointsMesh);
+      }
+
+      const geom = new THREE.BufferGeometry();
+      const positions = [];
+      const angleMin = msg.angle_min;
+      const angleInc = msg.angle_increment;
+      
+      for(let i = 0; i < msg.ranges.length; i++){
+        const r = msg.ranges[i];
+        if(!isFinite(r) || r > 30) continue;
+        
+        const angle = angleMin + i * angleInc;
+        const x = r * Math.cos(angle);
+        const z = r * Math.sin(angle);
+        
+        // Transform laser points to match robot position and orientation
+        positions.push(
+          currentAmclPose.position.x + x * Math.cos(currentAmclPose.yaw) - z * Math.sin(currentAmclPose.yaw),
+          0.2, // Slightly above ground
+          currentAmclPose.position.z - (x * Math.sin(currentAmclPose.yaw) + z * Math.cos(currentAmclPose.yaw))
+        );
+      }
+      
+      if (positions.length > 0) {
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        const mat = new THREE.PointsMaterial({color: 0x9c27b0, size: 0.07});
+        laserPointsMesh = new THREE.Points(geom, mat);
+        scene.add(laserPointsMesh);
+      }
+    }
+
+    // --- MAP FUNCTIONS  ---
+    function processMapMetadata(msg){
+      mapOrigin.x = msg.origin.position.x;
+      mapOrigin.y = msg.origin.position.y;
+      mapResolution = msg.resolution;
+      document.getElementById('mapResolution').textContent = `Resolution: ${mapResolution.toFixed(3)} m/cell`;
+    }
+
+    function processMapData(msg){
+      document.getElementById('mapDimensions').textContent = `Dimensions: ${msg.info.width} x ${msg.info.height}`;
+      document.getElementById('mapLastUpdate').textContent = `Last Update: ${new Date().toLocaleTimeString()}`;
+      
+      if (showMap) {
+        create3DMap(msg.info.width, msg.info.height, msg.data);
+      }
+    }
+
+    function create3DMap(width, height, data){
+      // Remove existing map if present
+      if (mapPlane) {
+        scene.remove(mapPlane);
+      }
+
+      // Create canvas for map texture
+      mapCanvas = document.createElement('canvas');
+      mapCanvas.width = width;
+      mapCanvas.height = height;
+      mapCtx = mapCanvas.getContext('2d');
+
+      // Create image data from occupancy grid
+      const img = mapCtx.createImageData(width, height);
+      for(let i = 0; i < data.length; i++){
+        const v = data[i];
+        // Color coding: gray for unknown, green for free, red for occupied
+        let c = (v < 0) ? [85, 85, 85] : (v < 50 ? [76, 175, 80] : [244, 67, 54]);
+        img.data[i*4] = c[0];
+        img.data[i*4+1] = c[1];
+        img.data[i*4+2] = c[2];
+        img.data[i*4+3] = 255;
+      }
+      mapCtx.putImageData(img, 0, 0);
+
+      // Create texture from canvas
+      mapTexture = new THREE.CanvasTexture(mapCanvas);
+      mapTexture.flipY = false; // Important for correct orientation
+      mapMaterial = new THREE.MeshBasicMaterial({
+        map: mapTexture, 
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8
+      });
+
+      // Calculate map dimensions in meters
+      const mapWidthMeters = width * mapResolution;
+      const mapHeightMeters = height * mapResolution;
+
+      // Create plane for the map with correct positioning
+      const geom = new THREE.PlaneGeometry(mapWidthMeters, mapHeightMeters);
+      mapPlane = new THREE.Mesh(geom, mapMaterial);
+      mapPlane.rotation.x = -Math.PI/2; // Rotate to lay flat on ground
+      
+      // Position the map correctly based on origin and dimensions
+      mapPlane.position.set(
+        mapOrigin.x + mapWidthMeters / 2, 
+        0.01, // Slightly above ground to avoid z-fighting
+        mapHeightMeters + mapOrigin.y -1    //   <<<<< to be tuned 
+      );
+      
+      scene.add(mapPlane);
+    }
+
+    function processMapUpdate(msg){
+      if (!mapCtx || !showMap) return;
+      
+      const {x, y, width, height, data} = msg;
+      const img = mapCtx.getImageData(x, y, width, height);
+      
+      for(let j = 0; j < height; j++){
+        for(let i = 0; i < width; i++){
+          const idx = (j * width + i) * 4;
+          const v = data[j * width + i];
+          let c = (v < 0) ? [85, 85, 85] : (v < 50 ? [76, 175, 80] : [244, 67, 54]);
+          img.data[idx] = c[0];
+          img.data[idx+1] = c[1];
+          img.data[idx+2] = c[2];
+          img.data[idx+3] = 255;
+        }
+      }
+      
+      mapCtx.putImageData(img, x, y);
+      if (mapTexture) mapTexture.needsUpdate = true;
+      
+      document.getElementById('mapLastUpdate').textContent = `Last Update: ${new Date().toLocaleTimeString()}`;
+    }
+    
+    function toggleMapVisibility() {
+      showMap = !showMap;
+      
+      if (showMap) {
+        document.getElementById('toggleMap').textContent = 'Hide Map';
+        // If we have map data, create the map
+        // Note: This would need access to the last received map data
+      } else {
+        // Hide the map
+        if (mapPlane) {
+          scene.remove(mapPlane);
+          mapPlane = null;
+        }
+        document.getElementById('toggleMap').textContent = 'Show Map';
+      }
+    }
+    
+    function clearMap() {
+      if (mapPlane) {
+        scene.remove(mapPlane);
+        mapPlane = null;
+      }
+      showMap = false;
+      document.getElementById('toggleMap').textContent = 'Show Map';
+    }
+
+    function subscribeTo(name, type, cb){
+      const topic = new ROSLIB.Topic({ ros, name, messageType:type });
+      topic.subscribe(cb);
+    }
+
+    // --- TELEOP ---
+    function sendCmdVel(lx, az){
+      if (!cmdVelTopic) {
+        console.error('cmd_vel topic not initialized');
+        return;
+      }
+      
+      const twist = new ROSLIB.Message({
+        linear: {x:lx, y:0, z:0},
+        angular: {x:0, y:0, z:az}
+      });
+      
+      cmdVelTopic.publish(twist);
+    }
+
+    function move(forward, turn){
+      const linScale = parseFloat(document.getElementById('linSpeed').value);
+      const angScale = parseFloat(document.getElementById('angSpeed').value);
+      const linearX = forward * linScale;
+      const angularZ = turn * angScale;
+      
+      sendCmdVel(linearX, angularZ);
+    }
+
+    function setupEventListeners() {
+      // Light toggles
+      document.getElementById('frontLights').addEventListener('change', (e) => {
+        const isOn = e.target.checked;
+        frontLightEmission1.intensity = isOn ? 1 : 0;
+        frontLightEmission2.intensity = isOn ? 1 : 0;
+      });
+      
+      document.getElementById('rearLights').addEventListener('change', (e) => {
+        const isOn = e.target.checked;
+        rearLightEmission1.intensity = isOn ? 1 : 0;
+        rearLightEmission2.intensity = isOn ? 1 : 0;
+      });
+      
+      // Map controls
+      document.getElementById('toggleMap').addEventListener('click', toggleMapVisibility);
+      document.getElementById('clearMap').addEventListener('click', clearMap);
+      
+      // Nav2 controls
+      document.getElementById('setGoalMode').addEventListener('click', () => {
+        isSettingGoal = !isSettingGoal;
+        document.getElementById('setGoalMode').textContent = 
+          isSettingGoal ? 'Cancel Goal Mode' : 'Set Goal';
+        document.getElementById('setGoalMode').classList.toggle('secondary', isSettingGoal);
+      });
+      
+      document.getElementById('cancelGoal').addEventListener('click', cancelCurrentGoal);
+      
+      document.getElementById('sendGoal').addEventListener('click', () => {
+        const x = parseFloat(document.getElementById('goalX').value);
+        const y = parseFloat(document.getElementById('goalY').value);
+        const theta = parseFloat(document.getElementById('goalTheta').value);
+        sendNavGoal(x, y, theta);
+      });
+      
+      document.getElementById('initPose').addEventListener('click', () => {
+        // Set initial pose to current robot position or a default
+        setInitialPose(
+          currentAmclPose.position.x || 0,
+          currentAmclPose.position.y || 0,
+          currentAmclPose.yaw || 0
+        );
+      });
+      
+      document.getElementById('globalLoc').addEventListener('click', () => {
+        // Global localization (initialize with large covariance)
+        setInitialPose(0, 0, 0); // This would need a different covariance for global localization
+      });
+      
+      // Click to set goal (if in goal mode)
+      renderer.domElement.addEventListener('click', (event) => {
+        if (!isSettingGoal) return;
+        
+        // Calculate clicked position in 3D space (simplified)
+        const mouse = new THREE.Vector2();
+        const rect = renderer.domElement.getBoundingClientRect();
+        
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+        
+        const intersects = raycaster.intersectObject(ground);
+        
+        if (intersects.length > 0) {
+          const point = intersects[0].point;
+          const goalX = point.x;
+          const goalY = -point.z; // Convert from Three.js Z to ROS Y
+          const goalTheta = 0; // Default orientation
+          
+          // Update form values
+          document.getElementById('goalX').value = goalX.toFixed(2);
+          document.getElementById('goalY').value = goalY.toFixed(2);
+          
+          // Send the goal
+          sendNavGoal(goalX, goalY, goalTheta);
+          
+          // Exit goal mode
+          isSettingGoal = false;
+          document.getElementById('setGoalMode').textContent = 'Set Goal';
+          document.getElementById('setGoalMode').classList.remove('secondary');
+        }
+      });
+    }
+  </script>
+</body>
+</html>
