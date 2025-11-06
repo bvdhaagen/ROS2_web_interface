@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOLIATH 6-DOF Robot Arm Control</title>
+  <script src="https://cdn.rawgit.com/RobotWebTools/roslibjs/0.20.0/build/roslib.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>GOLIATH 6-DOF Robot Arm Control</h1>
+      <div class="subtitle">6-DOF Robot Arm Control Interface</div>
+    </header>
+    
+    <div class="content">
+      <div id="visualization">
+        <div id="debugInfo">Initializing 3D visualization...</div>
+      </div>
+      
+      <div class="controls">
+        <div class="control-group">
+          <h2>ROS Connection</h2>
+          <div class="connection-input">
+            <label for="rosBridgeUrl">ROS Bridge URL:</label>
+            <input type="text" id="rosBridgeUrl" value="ws://192.168.2.23:9090" placeholder="ws://localhost:9090">
+            <div class="button-group">
+              <button onclick="connectToROS()" class="success">Connect</button>
+              <button onclick="disconnectROS()" class="warning">Disconnect</button>
+              <button onclick="testConnection()" class="">Test Connection</button>
+            </div>
+          </div>
+          <div class="connection-status">
+            <div class="status-dot" id="rosStatusDot"></div>
+            <span id="rosStatusText">Not Connected</span>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>Joint Control</h2>
+          <div class="command-mode">
+            <div class="mode-indicator" id="commandModeIndicator"></div>
+            <span id="commandModeText">Mode: Reading Joint States</span>
+          </div>
+          
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 1 (Base)</span>
+              <span class="joint-value" id="joint1Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint1" min="-3.14" max="3.14" step="0.01" value="0" oninput="updateJoint(1, this.value)">
+          </div>
+          
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 2 (Shoulder)</span>
+              <span class="joint-value" id="joint2Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint2" min="-2.0" max="2.0" step="0.01" value="0" oninput="updateJoint(2, this.value)">
+          </div>
+          
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 3 (Elbow)</span>
+              <span class="joint-value" id="joint3Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint3" min="-2.0" max="2.0" step="0.01" value="0" oninput="updateJoint(3, this.value)">
+          </div>
+
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 4 (Wrist 1)</span>
+              <span class="joint-value" id="joint4Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint4" min="-3.14" max="3.14" step="0.01" value="0" oninput="updateJoint(4, this.value)">
+          </div>
+
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 5 (Wrist 2)</span>
+              <span class="joint-value" id="joint5Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint5" min="-3.14" max="3.14" step="0.01" value="0" oninput="updateJoint(5, this.value)">
+          </div>
+
+          <div class="joint-control">
+            <div class="joint-label">
+              <span class="joint-name">Joint 6 (Wrist 3)</span>
+              <span class="joint-value" id="joint6Value">0.00 rad</span>
+            </div>
+            <input type="range" id="joint6" min="-3.14" max="3.14" step="0.01" value="0" oninput="updateJoint(6, this.value)">
+          </div>
+          
+          <div class="button-group">
+            <button onclick="setHomePosition()" class="success">Home Position</button>
+            <button onclick="enableCommandMode()" id="commandModeBtn">Enable Command Mode</button>
+            <button onclick="stopArm()" class="danger">Emergency Stop</button>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <h2>End Effector Pose</h2>
+          <div class="pose-display">
+            <div>Position X: <span id="eePosX">0.000</span> m</div>
+            <div>Position Y: <span id="eePosY">0.000</span> m</div>
+            <div>Position Z: <span id="eePosZ">0.000</span> m</div>
+            <div>Orientation R: <span id="eeRotR">0.000</span> rad</div>
+            <div>Orientation P: <span id="eeRotP">0.000</span> rad</div>
+            <div>Orientation Y: <span id="eeRotY">0.000</span> rad</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; overflow: hidden; height: 100vh; }
+    .container { display: flex; flex-direction: column; height: 100vh; }
+    header { text-align: center; padding: 15px; background: rgba(0, 0, 0, 0.3); border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0; }
+    h1 { margin: 0; font-size: 2.2rem; background: linear-gradient(90deg, #4e54c8, #8f94fb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { font-size: 1rem; opacity: 0.8; margin-top: 5px; }
+    .content { display: flex; flex: 1; overflow: hidden; }
+    #visualization { flex: 1; position: relative; background: #0a0a15; }
+    .controls { width: 400px; padding: 20px; background: rgba(0, 0, 0, 0.2); border-left: 1px solid rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+    .control-group { background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    h2 { margin-top: 0; font-size: 1.3rem; color: #8f94fb; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; margin-bottom: 15px; }
+    .connection-input { display: flex; flex-direction: column; gap: 10px; }
+    .connection-input label { font-weight: 600; color: #8f94fb; }
+    .connection-input input { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px; padding: 10px; color: white; font-size: 1rem; }
+    .connection-input input:focus { outline: none; border-color: #8f94fb; }
+    .connection-status { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f44336; }
+    .status-dot.connected { background: #4caf50; animation: pulse 2s infinite; }
+    .status-dot.connecting { background: #ff9800; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .joint-control { margin: 10px 0; }
+    .joint-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .joint-name { font-weight: 600; color: #8f94fb; }
+    .joint-value { font-family: 'Courier New', monospace; background: rgba(0, 0, 0, 0.3); padding: 2px 8px; border-radius: 3px; font-size: 0.9rem; }
+    input[type="range"] { width: 100%; height: 6px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 5px; outline: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #8f94fb; cursor: pointer; transition: all 0.2s; }
+    input[type="range"]::-webkit-slider-thumb:hover { background: #6a6fc9; transform: scale(1.1); }
+    .button-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+    button { background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%); border: none; color: white; padding: 10px 15px; border-radius: 5px; cursor: pointer; transition: all 0.3s; flex: 1; min-width: 80px; font-weight: bold; }
+    button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }
+    button.success { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); }
+    button.warning { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }
+    button.danger { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+    .command-mode { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 5px; }
+    .mode-indicator { width: 12px; height: 12px; border-radius: 50%; background: #ff9800; }
+    .mode-indicator.active { background: #4caf50; animation: pulse 1s infinite; }
+    .pose-display { margin-top: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 5px; font-size: 0.9rem; font-family: 'Courier New', monospace; }
+    .pose-display div { margin-bottom: 3px; }
+    #debugInfo { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; z-index: 1000; }
+  </style>
+
+  <script>
+    // 6-DOF Robot Arm Control
+    let robotConnected = false;
+    let commandMode = false;
+    let scene, camera, renderer, controls;
+    let ros;
+    let jointTrajectoryPublisher;
+    let armControllerPublisher;
+    let jointStateSubscriber;
+
+    // Robot state - all 6 joints
+    const jointAngles = [0, 0, 0, 0, 0, 0];
+    const commandAngles = [0, 0, 0, 0, 0, 0];
+    const robotLinks = [];
+    const robotJoints = [];
+
+    // Robot parameters
+    const linkLengths = [0.2, 0.2, 0.33, 0.4, 0.12, 0.08, 0.15];
+
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', function() {
+      initThree();
+      setupEventListeners();
+    });
+
+    function initThree() {
+      // Create scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      
+      // Setup camera
+      const vizContainer = document.getElementById('visualization');
+      camera = new THREE.PerspectiveCamera(60, vizContainer.clientWidth / vizContainer.clientHeight, 0.1, 100);
+      camera.position.set(2, 2, 3);
+      camera.lookAt(0, 0.5, 0);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(vizContainer.clientWidth, vizContainer.clientHeight);
+      renderer.shadowMap.enabled = true;
+      vizContainer.appendChild(renderer.domElement);
+      
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      
+      // Add lighting
+      const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(5, 10, 5);
+      directionalLight.castShadow = true;
+      scene.add(directionalLight);
+      
+      // Create ground plane
+      const groundGeometry = new THREE.PlaneGeometry(4, 4);
+      const groundMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x16213e,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      
+      // Add grid helper
+      const gridHelper = new THREE.GridHelper(4, 10, 0xffffff, 0xffffff);
+      gridHelper.material.opacity = 0.2;
+      gridHelper.material.transparent = true;
+      scene.add(gridHelper);
+      
+      // Add coordinate axes
+      const axesHelper = new THREE.AxesHelper(1);
+      scene.add(axesHelper);
+      
+      // Create robot arm
+      createRobotArm();
+      
+      document.getElementById('debugInfo').textContent = '3D Visualization Ready';
+      
+      // Start animation loop
+      animate();
+      
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function createRobotArm() {
+      // Clear existing arm
+      robotLinks.forEach(link => scene.remove(link));
+      robotJoints.forEach(joint => scene.remove(joint));
+      robotLinks.length = 0;
+      robotJoints.length = 0;
+      
+      // Base (link0)
+      const baseGeometry = new THREE.CylinderGeometry(0.25, 0.25, 0.15, 16);
+      const baseMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+      const base = new THREE.Mesh(baseGeometry, baseMaterial);
+      base.position.y = 0.075;
+      base.castShadow = true;
+      scene.add(base);
+      robotLinks.push(base);
+      
+      // Create links and joints for all 6 DOF
+      for (let i = 0; i < 7; i++) {
+        const linkGeometry = new THREE.CylinderGeometry(0.05, 0.05, linkLengths[i], 16);
+        const linkMaterial = new THREE.MeshPhongMaterial({ 
+          color: i % 2 === 0 ? 0x4e54c8 : 0x8f94fb 
+        });
+        const link = new THREE.Mesh(linkGeometry, linkMaterial);
+        link.castShadow = true;
+        
+        scene.add(link);
+        robotLinks.push(link);
+        
+        if (i < 6) {
+          const jointGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+          const jointMaterial = new THREE.MeshPhongMaterial({ color: 0xff9800 });
+          const joint = new THREE.Mesh(jointGeometry, jointMaterial);
+          joint.castShadow = true;
+          scene.add(joint);
+          robotJoints.push(joint);
+        }
+      }
+      
+      updateRobotArm();
+    }
+
+    function updateRobotArm() {
+      // Update base rotation (Joint 1)
+      robotLinks[1].rotation.y = jointAngles[0];
+      
+      // Calculate forward kinematics for all 6 joints
+      let currentAngle = 0;
+      let currentX = 0;
+      let currentY = 0.15;
+      
+      for (let i = 0; i < 6; i++) {
+        currentAngle += jointAngles[i];
+        
+        if (i > 0) {
+          const linkLength = linkLengths[i];
+          currentX += linkLengths[i-1] * Math.cos(currentAngle - jointAngles[i]);
+          currentY += linkLengths[i-1] * Math.sin(currentAngle - jointAngles[i]);
+          
+          // Position and rotate the link
+          robotLinks[i+1].position.set(
+            currentX + linkLength/2 * Math.cos(currentAngle),
+            currentY + linkLength/2 * Math.sin(currentAngle),
+            0
+          );
+          
+          // Apply rotation for the link
+          robotLinks[i+1].rotation.z = Math.PI / 2 + currentAngle;
+        }
+        
+        // Update joint position
+        if (i < 6) {
+          robotJoints[i].position.set(currentX, currentY, 0);
+        }
+      }
+      
+      // Update end effector
+      const eeLength = linkLengths[6];
+      robotLinks[7].position.set(
+        currentX + eeLength/2 * Math.cos(currentAngle),
+        currentY + eeLength/2 * Math.sin(currentAngle),
+        0
+      );
+      
+      // Apply end effector orientation based on wrist joints
+      robotLinks[7].rotation.z = Math.PI / 2 + currentAngle;
+      
+      updateEndEffectorDisplay(currentX, currentY, currentAngle);
+    }
+
+    function updateEndEffectorDisplay(x, y, angle) {
+      document.getElementById('eePosX').textContent = x.toFixed(3);
+      document.getElementById('eePosY').textContent = y.toFixed(3);
+      document.getElementById('eePosZ').textContent = '0.000';
+      
+      // Calculate orientation from wrist joints (joints 4,5,6)
+      document.getElementById('eeRotR').textContent = jointAngles[3].toFixed(3);
+      document.getElementById('eeRotP').textContent = jointAngles[4].toFixed(3);
+      document.getElementById('eeRotY').textContent = jointAngles[5].toFixed(3);
+    }
+
+    function onWindowResize() {
+      const vizContainer = document.getElementById('visualization');
+      camera.aspect = vizContainer.clientWidth / vizContainer.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(vizContainer.clientWidth, vizContainer.clientHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Joint control functions
+    function updateJoint(jointNumber, value) {
+      const radValue = parseFloat(value);
+      commandAngles[jointNumber - 1] = radValue;
+      document.getElementById(`joint${jointNumber}Value`).textContent = radValue.toFixed(2) + ' rad';
+      
+      if (commandMode) {
+        for (let i = 0; i < 6; i++) {
+          jointAngles[i] = commandAngles[i];
+        }
+        updateRobotArm();
+        safePublishJointTrajectory();
+      }
+    }
+
+    function setHomePosition() {
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById(`joint${i}`).value = 0;
+        updateJoint(i, 0);
+      }
+    }
+
+    function enableCommandMode() {
+      commandMode = !commandMode;
+      const button = document.getElementById('commandModeBtn');
+      const indicator = document.getElementById('commandModeIndicator');
+      const text = document.getElementById('commandModeText');
+      
+      if (commandMode) {
+        button.textContent = 'Disable Command Mode';
+        button.className = 'warning';
+        indicator.className = 'mode-indicator active';
+        text.textContent = 'Mode: Sending Joint Commands';
+      } else {
+        button.textContent = 'Enable Command Mode';
+        button.className = '';
+        indicator.className = 'mode-indicator';
+        text.textContent = 'Mode: Reading Joint States';
+      }
+    }
+
+    function stopArm() {
+      alert('Emergency Stop Activated!');
+    }
+
+    // ROS functions
+    function connectToROS() {
+      const rosBridgeUrl = document.getElementById('rosBridgeUrl').value;
+      updateROSStatus('Connecting...', 'connecting');
+      
+      ros = new ROSLIB.Ros({ url: rosBridgeUrl });
+      
+      ros.on('connection', () => {
+        updateROSStatus('Connected', 'connected');
+        setupROSTopics();
+      });
+      
+      ros.on('error', (error) => {
+        updateROSStatus(`Error: ${error.message}`, 'error');
+      });
+      
+      ros.on('close', () => {
+        updateROSStatus('Disconnected', 'disconnected');
+      });
+    }
+
+    function setupROSTopics() {
+      jointTrajectoryPublisher = new ROSLIB.Topic({
+        ros: ros,
+        name: 'goliath_controller/joint_trajectory',
+        messageType: 'trajectory_msgs/JointTrajectory'
+      });
+      
+      armControllerPublisher = new ROSLIB.Topic({
+        ros: ros,
+        name: '/arm_controller/joint_trajectory',
+        messageType: 'trajectory_msgs/JointTrajectory'
+      });
+
+      // Subscribe to joint states
+      jointStateSubscriber = new ROSLIB.Topic({
+        ros: ros,
+        name: '/joint_states',
+        messageType: 'sensor_msgs/JointState'
+      });
+      
+      jointStateSubscriber.subscribe(processJointStates);
+    }
+
+    function processJointStates(msg) {
+      if (!commandMode && msg.position && msg.position.length >= 6) {
+        for (let i = 0; i < 6; i++) {
+          jointAngles[i] = msg.position[i];
+          document.getElementById(`joint${i+1}`).value = jointAngles[i];
+          document.getElementById(`joint${i+1}Value`).textContent = jointAngles[i].toFixed(2) + ' rad';
+        }
+        updateRobotArm();
+      }
+    }
+
+    function disconnectROS() {
+      if (ros) {
+        ros.close();
+      }
+      updateROSStatus('Disconnected', 'disconnected');
+    }
+
+    function testConnection() {
+      if (ros && ros.isConnected) {
+        alert('ROS Bridge is connected!');
+      } else {
+        alert('Not connected to ROS Bridge');
+      }
+    }
+
+    function updateROSStatus(message, status) {
+      const statusElement = document.getElementById('rosStatusText');
+      const indicator = document.getElementById('rosStatusDot');
+      
+      statusElement.textContent = message;
+      indicator.className = 'status-dot';
+      if (status === 'connected') indicator.classList.add('connected');
+      else if (status === 'connecting') indicator.classList.add('connecting');
+    }
+
+    function safePublishJointTrajectory() {
+      if (!jointTrajectoryPublisher || !commandMode) return;
+      publishJointTrajectory();
+    }
+
+    function publishJointTrajectory() {
+      const jointTrajectory = new ROSLIB.Message({
+        header: { stamp: { sec: 0, nanosec: 0 }, frame_id: 'base_link' },
+        joint_names: ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5', 'joint_6'],
+        points: [{
+          positions: commandAngles,
+          velocities: [0, 0, 0, 0, 0, 0],
+          accelerations: [0, 0, 0, 0, 0, 0],
+          time_from_start: { sec: 1, nanosec: 0 }
+        }]
+      });
+      
+      jointTrajectoryPublisher.publish(jointTrajectory);
+      if (armControllerPublisher) {
+        armControllerPublisher.publish(jointTrajectory);
+      }
+    }
+
+    function setupEventListeners() {
+      window.addEventListener('resize', onWindowResize);
+    }
+  </script>
+</body>
+</html>
